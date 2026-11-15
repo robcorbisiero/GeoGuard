@@ -1,44 +1,48 @@
-# GeoGuard
+# GeoGuard — geospatial data prototype
 
-GeoGuard is a containerized, full-stack geospatial risk assessment application designed for the insurance industry. The application converts text-based addresses into precise risk profiles, visualizing data on an interactive map and generating AI-powered Resilience Recommendations.
+An exploratory full-stack application that geocodes an address, retrieves elevation and historical weather, and displays a map with an optional generated recommendation.
 
-## Architecture
+**Status:** portfolio prototype. This is not a validated insurance risk model. Elevation and weather summaries are inputs to a demonstration, not evidence of a property's flood, wildfire, or insurability rating.
 
-- **Frontend:** Built with Vite and React. Utilizes `react-leaflet` for interactive mapping, `chart.js` for data visualization, and custom vanilla CSS for a premium dark-mode aesthetic.
-- **Backend:** High-performance REST API built with FastAPI (Python). 
-- **Integrations:**
-  - **Geocoding:** Converts text locations to coordinates via `geopy` and Nominatim (OpenStreetMap).
-  - **Climate Engine:** Fetches coordinate-specific elevation and 10-year historic weather trends via Open-Meteo API.
-  - **AI Engine:** Evaluates geographic risk proxies (elevation, rainfall, max temperature, land cover) against `gemini-1.5-pro` to synthesize dynamic recommendations.
+## What is implemented
 
-## Setup & Local Deployment
+- React/Vite frontend with Leaflet maps and charts.
+- FastAPI POST /api/assess-risk endpoint.
+- Nominatim geocoding and Open-Meteo elevation/archive requests.
+- Approximately one year of weather records ending roughly one year before the request date. The code does not retrieve ten years of trends.
+- Optional Google GenAI recommendation; the code configures gemini-2.5-flash. Without a key, the response explicitly labels its recommendation as mock output.
+- Six offline regression tests for unavailable climate data versus valid zero measurements.
 
-The application is fully containerized using Docker Compose.
+## Run locally
 
-### Prerequisites
-- Docker Engine / Docker Desktop
-- A Google Gemini API Key 
+Requires Git and Docker with Compose. External geocoding/weather requests require internet access. A Gemini key is optional and may incur provider charges when used.
 
-### Environment Variables
-Optionally, set your Gemini API key in your terminal context to enable real AI generation:
 ```bash
-set GEMINI_API_KEY="your-api-key-here" # Windows Command Prompt
-$env:GEMINI_API_KEY="your-api-key-here" # Windows PowerShell
-export GEMINI_API_KEY="your-api-key-here" # Mac/Linux
+git clone https://github.com/robcorbisiero/GeoGuard.git
+cd GeoGuard
+docker compose up --build
 ```
-*(If the key is omitting, the system gracefully generates mocked recommendations).*
 
-### Running the App
-1. Clone the repository and navigate into the project directory.
-2. Run Docker Compose:
+Open http://localhost:5173 and API documentation at http://localhost:8000/docs. To enable generated recommendations, set GEMINI_API_KEY privately in your shell before starting Compose. Never put a real key in Git or frontend configuration.
+
+## Run the tested part without cloud credentials
+
 ```bash
-docker-compose up --build
+python -m venv .venv
+# Windows: .venv\Scripts\activate
+# macOS/Linux: source .venv/bin/activate
+python -m pip install requests==2.32.5
+python -m unittest discover -s tests -v
 ```
-3. Open your browser and navigate to `http://localhost:5173`.
 
-## Custom Skill: Address-to-Risk Workflow
-1. A user enters an address (e.g., "Miami, FL") in the frontend interface.
-2. The FastApi Backend uses OpenStreetMap to locate the exact coordinates.
-3. The API then retrieves historical rainfall metrics and localized elevation data via Open-Meteo.
-4. The Gemini 1.5 Pro AI digests the collated environmental string and generates strategic recommendations (e.g. "Install backwater valves").
-5. The frontend plots a 5000m heat radius over the geocoded location and populates the dashboard metrics.
+The tests mock HTTP responses and cover HTTP failures, timeouts, absent measurements, real sea-level elevation, and real zero rainfall. CI runs this suite. They do not validate live provider availability, model quality, frontend interactions, or the whole Docker stack.
+
+## Engineering correction
+
+Weather-service failures previously returned 0.0 elevation or zero-valued climate data. Those values could reach the recommendation path as if they were measured. Requests now have a timeout, reject HTTP errors, and return unavailable data on failure; the API's existing error branch handles that state.
+
+## Limits and next work
+
+There is no authentication, production rate limiting, calibrated risk scoring, or provider-contract test. The map radius is a visual aid, not a computed hazard boundary. Climate results are not a future climate projection. Dependencies and container startup need an end-to-end refresh before presenting this as a deployed product. Use synthetic locations and treat recommendations as illustrative.
+
+**Portfolio context:** the [infrastructure homelab](https://github.com/robcorbisiero/enterprise-infrastructure-homelab) contains a separate evidence-based IT administration walkthrough.
